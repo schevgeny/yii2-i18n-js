@@ -33,7 +33,7 @@ class I18nJs extends BaseObject
     /**
      * @var array
      */
-    private $basePaths = [];
+    public $basePaths = [];
 
     /**
      * @var array
@@ -65,8 +65,10 @@ class I18nJs extends BaseObject
         }
         $this->filenameForSavingModificationTime =
             Yii::getAlias('@runtime') . '/i18n-js-modification-time';
-        $this->basePaths = self::getBasePaths();
+        $this->basePaths = $this->getBasePaths();
+        
         $this->filenames = $this->getFilenames();
+      
         $this->savedModificationTime = $this->getSavedModificationTime();
         $this->currentModificationTime = $this->getCurrentModificationTime();
         if (
@@ -83,8 +85,18 @@ class I18nJs extends BaseObject
         $this->registerJsScript();
     }
 
-    public static function getBasePaths()
+   
+
+    private function getBasePaths()
     {
+        if($this->basePaths){
+            return  array_map(function($path){
+                if($this->useOneLanguage){
+                    $path .= '/' . Yii::$app->language;
+                }
+                return realpath(Yii::getAlias($path));
+            }, $this->basePaths);
+        }
         $basePaths = [];
         foreach (Yii::$app->i18n->translations as $category => $translation) {
             if ($category !== 'yii') {
@@ -98,7 +110,7 @@ class I18nJs extends BaseObject
                     $path = realpath(Yii::getAlias($translation->basePath));
                 }
                 if($this->useOneLanguage){
-                    $path .= '/' . Yii::$app->language;
+                   // $path .= '/' . Yii::$app->language;
                 }
                 $basePaths[] = $path; 
             }
@@ -122,7 +134,7 @@ class I18nJs extends BaseObject
                     '=^' .
                         preg_quote($basePath . DIRECTORY_SEPARATOR) .
                         '.+?' .
-                        preg_quote(DIRECTORY_SEPARATOR) .
+                   
                     '=',
                     $filename
                 )) {
@@ -171,13 +183,19 @@ class I18nJs extends BaseObject
                         2
                     );
                 /** @noinspection PhpIncludeInspection */
-                $result
-                    [$languageAndCategoryAsArray[0]] // Language
+                if($this->useOneLanguage){
+                    $result[Yii::$app->language] // Language
+                        [$languageAndCategoryAsArray[0]] = // Category
+                            include $filename;
+                }else{
+                    $result[$languageAndCategoryAsArray[0]] // Language
                         [$languageAndCategoryAsArray[1]] = // Category
                             include $filename;
+                }
+                
             }
         }
-        return
+         return
             file_put_contents(
                 $this->jsFilenameOnServer,
                 'var YII_I18N_JS = ' . Json::encode($result) . ';' . "\n"
@@ -195,7 +213,8 @@ class I18nJs extends BaseObject
     private function registerJsScript()
     {
         $sourceLanguage = strtolower(Yii::$app->sourceLanguage);
-        $language = strtolower(Yii::$app->language);
+        $language = Yii::$app->language;
+        $useOneLanguage = (int)$this->useOneLanguage;
         $js = <<<JS
 ;(function () {
   if (!('yii' in window)) {
@@ -208,12 +227,12 @@ class I18nJs extends BaseObject
       );
     }
     yii.t = function (category, message, params, language) {
-        localLang = document.documentElement.lang;
-        if(useOneLanguage){
+        var localLang = document.documentElement.lang;
+        if("{$useOneLanguage}"){
             localLang = "{$language}";
         }
-         
       language = language || localLang;
+      
       var translatedMessage;
       if (
         language === "{$sourceLanguage}" ||
@@ -226,6 +245,7 @@ class I18nJs extends BaseObject
       } else {
         translatedMessage = YII_I18N_JS[language][category][message];
       }
+     
       if (params) {
         Object.keys(params).map(function (key) {
           var escapedParam =
