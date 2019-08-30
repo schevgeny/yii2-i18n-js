@@ -18,6 +18,8 @@ class I18nJs extends BaseObject
      */
     public $jsFilename = 'js/i18n.js';
 
+    public $useOneLanguage = true;
+
     /**
      * @var string
      */
@@ -47,6 +49,7 @@ class I18nJs extends BaseObject
      * @var integer
      */
     private $currentModificationTime;
+    
 
     /**
      * @inheritdoc
@@ -86,14 +89,18 @@ class I18nJs extends BaseObject
         foreach (Yii::$app->i18n->translations as $category => $translation) {
             if ($category !== 'yii') {
                 if (is_array($translation)) {
-                    $basePaths[] =
+                    $path = 
                         isset($translation['basePath'])
                             ? realpath(Yii::getAlias($translation['basePath']))
                             : realpath(Yii::getAlias('@app/messages'));
-                } else {
-                    $basePaths[] =
-                        realpath(Yii::getAlias($translation->basePath));
+                } elseif(isset($translation->basePath)) {
+                    
+                    $path = realpath(Yii::getAlias($translation->basePath));
                 }
+                if($this->useOneLanguage){
+                    $path .= '/' . Yii::$app->language;
+                }
+                $basePaths[] = $path; 
             }
         }
         return array_unique($basePaths);
@@ -188,6 +195,7 @@ class I18nJs extends BaseObject
     private function registerJsScript()
     {
         $sourceLanguage = strtolower(Yii::$app->sourceLanguage);
+        $language = strtolower(Yii::$app->language);
         $js = <<<JS
 ;(function () {
   if (!('yii' in window)) {
@@ -200,7 +208,12 @@ class I18nJs extends BaseObject
       );
     }
     yii.t = function (category, message, params, language) {
-      language = language || document.documentElement.lang;
+        localLang = document.documentElement.lang;
+        if(useOneLanguage){
+            localLang = "{$language}";
+        }
+         
+      language = language || localLang;
       var translatedMessage;
       if (
         language === "{$sourceLanguage}" ||
